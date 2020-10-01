@@ -1,37 +1,62 @@
 from itertools import zip_longest
 
 #approximate damage bonusses for spells: projectile, aoe: 0, summons: 15, apocrypha: 40
-base_stats = ["atk", "def", "str", "vit", "dex", "agil", "avd", "int", "mind", "res"]
-elements = ["air", "earth", "lightning", "water", "fire", "ice", "divine", "dark"]
-dmg_types = ["crush", "slash", "pierce"]
-races = ["human", "reptile", "divine", "umbra", "faerie", "phantom", "beast", "dragon", "golem"]
 
-class Unit:
+class Base:
 
-    skills = ["dual_wield", "w_type", "w_rank", "aug_elem", "aug_rank", "racial_race", "racial_rank"]
+    base_stats = ["atk", "def", "str", "vit", "dex", "agil", "avd", "int", "mind", "res"]
+    elements = ["air", "earth", "lightning", "water", "fire", "ice", "divine", "dark"]
+    dmg_types = ["crush", "slash", "pierce"]
+    races = ["human", "reptile", "divine", "umbra", "faerie", "phantom", "beast", "dragon", "golem"]
+
+    def __init__(self, name, stats=None):
+        self.name = name
+        self.stats = stats
+
+    @property
+    def stats(self):
+        return self._stats
+
+    @stats.setter
+    def stats(self, s):
+        s = [0] * len(self.base_stats) if s is None else s
+        assert len(s) == len(self.base_stats), "invalid stats"
+        self._stats = dict(zip(self.base_stats, s))
+
+
+class Unit(Base):
+
+    skill_categories = ["dual_wield", "w_type", "w_rank", "aug_elem", "aug_rank", "racial_race", "racial_rank"]
 
     #stats consist of class atk and def as seen on the class list on the party screen and
     #stats of the unit without any gear, which is the same as a units base stats + class stats
-    def __init__(self, name, race="human", stats=[0]*10, equipment=[None]*5, skills=[False] + ["none", 0] * 3):
-
-        assert len(stats) == 10 and len(equipment) == 5 and len(skills) == 7, "invalid stats"
-
-        self.name = name
+    def __init__(self, name, race="human", stats=None, equipment=None, skills=None):
+        super().__init__(name, stats)
         self.race = race
-
-        self.stats = {base_stats[i]:stats[i] for i in range(10)}
-        self.skills = {Unit.skills[i]:skills[i] for i in range(7)}
-
+        self.skills = skills
         self.equipment = equipment
         #self.status
+
+    @property
+    def equipment(self):
+        return self._equipment
+
+    @equipment.setter
+    def equipment(self, equip):
+        equip = [0] * 5 if equip is None else equip
+        assert len(equip) == 5, "invalid equipment"
+        self._equipment = equip
+
+    @property
+    def skills(self):
+        return self._skills
+
+    @skills.setter
+    def skills(self, s):
+        s = [0]*len(self.skill_categories) if s is None else s
+        assert len(s) == len(self.skill_categories), "invalid skills"
+        self._skills = dict(zip(self.skill_categories, s))
     
-    def equip(self, *equipment):
-        self.equipment = equipment
-
-    def equip_slot(self, slot, equipment):
-        assert slot > 0 and slot <= 5, "wrong slot"
-        self.equipment[slot-1] = equipment
-
     def __str__(self):
         return self.name
 
@@ -56,7 +81,6 @@ class Unit:
                 + 0.5 * self.gear_stat_total("str") + 0.9 * self.gear_stat_total("vit") \
                 + (other.skills["w_type"] == self.skills["w_type"]) * self.skills["w_rank"] * 3 \
                 + (other.get_weapon_elem() == self.skills["aug_elem"]) * self.skills["aug_rank"] * 3
-
 
     def calc_damage_bonus(self, other):
         weapon = self.equipment[0]
@@ -85,37 +109,29 @@ class Unit:
 
     def attack(self, other):
         assert isinstance(self.equipment[0], Weapon), "no weapon equipped"
-        #print(self.calc_offense(other), other.calc_toughness(self), self.calc_damage_bonus(other), other.calc_resistance(self), self.calc_extra_damage(), other.calc_defense())
+        print(self.calc_offense(other), other.calc_toughness(self), self.calc_damage_bonus(other), other.calc_resistance(self), self.calc_extra_damage(), other.calc_defense())
         return round(max(self.calc_offense(other) - other.calc_toughness(self), 0) * min(max(1 + self.calc_damage_bonus(other) - other.calc_resistance(self), 0), 2.5) + self.calc_extra_damage() - other.calc_defense())
 
-class Weapon:
+
+class Weapon(Base):
 
     weapon_bonus = ["dmg_type", "dmg_bonus", "elem_type", "elem_bonus", "race_type", "race_bonus"]
 
-    def __init__(self, name, scaling="str", stats=[0]*10, bonusses=["crush", 0, "none", 0, "none", 0]):
-
-        assert len(stats) == 10 and len(bonusses) == 6, "invalid stats"
-
-        self.name = name
-
+    def __init__(self, name, scaling="str", stats=None, bonusses=None):
+        super().__init__(name, stats)
+        assert scaling == "str" or scaling == "dex", "invalid scaling"
         self.scaling = scaling
-        self.stats = {base_stats[i]:stats[i] for i in range(10)}
-        self.bonusses = {Weapon.weapon_bonus[i]:bonusses[i] for i in range(6)}
+        self.bonusses = bonusses
 
-    def set_dmg_bonus(self, dmg_type, percent):
-        assert dmg_type in dmg_types, "invalid type"
-        self.bonusses["dmg_type"] = dmg_type
-        self.bonusses["dmg_bonus"] = percent
+    @property
+    def bonusses(self):
+        return self._bonusses
 
-    def set_elem_bonus(self, elem_type, percent):
-        assert elem_type == "none" or elem_type in elements, "invalid type"
-        self.bonusses["elem_type"] = elem_type
-        self.bonusses["elem_bonus"] = percent
-
-    def set_race_bonus(self, race_type, percent):
-        assert race_type == "none" or race_type in races, "invalid type"
-        self.bonusses["race_type"] = race_type
-        self.bonusses["race_bonus"] = percent
+    @bonusses.setter
+    def bonusses(self, bonus):
+        bonus = ["crush", 0, "none", 0, "none", 0] if bonus is None else bonus
+        assert len(bonus) == len(self.weapon_bonus) and bonus[0] in self.dmg_types, "invalid bonusses"
+        self._bonusses = dict(zip(self.weapon_bonus, bonus))
 
     def __str__(self):
         string = ''
@@ -124,32 +140,44 @@ class Weapon:
             string += '\n' + "{:>5} {:>3} {:>15} {:>10}".format(*row)
         return self.name + string
 
-class Armor:
+class Armor(Base):
 
-    def __init__(self, name, stats=[0]*10, dmg_resists=[0]*3, elem_resists=[0]*8, racial_resists=[0]*9, is_jewelry=False):
-
-        assert len(stats) == 10 and len(dmg_resists) == 3 and \
-               len(elem_resists) == 8 and len(racial_resists) == 9, "invalid stats"
-
-        self.name = name
-
-        self.stats = {base_stats[i]:stats[i] for i in range(10)}
-        self.dmg_resists = {dmg_types[i]:dmg_resists[i] for i in range(3)}
-        self.elem_resists = {elements[i]:elem_resists[i] for i in range(8)}
-        self.racial_resists = {races[i]:racial_resists[i] for i in range(9)}
+    def __init__(self, name, stats=None, dmg_resists=None, elem_resists=None, racial_resists=None, is_jewelry=False):
+        super().__init__(name, stats)
+        self.dmg_resists = dmg_resists
+        self.elem_resists = elem_resists
+        self.racial_resists = racial_resists
         self.is_jewelry = is_jewelry
 
-    def set_dmg_resists(self, resists):
-        assert len(resists) == 3, "invalid amount of arguments"
-        self.dmg_resists = {dmg_types[i]:resists[i] for i in range(3)}
+    @property
+    def dmg_resists(self):
+        return self._dmg_resists
 
-    def set_elem_resists(self, resists):
-        assert len(resists) == 8, "invalid amount of arguments"
-        self.elem_resists = {elements[i]:resists[i] for i in range(8)}
+    @dmg_resists.setter
+    def dmg_resists(self, resists):
+        resists = [0] * len(self.dmg_types) if resists is None else resists
+        assert len(resists) == len(self.dmg_types), "invalid amount of resistances"
+        self._dmg_resists = dict(zip(self.dmg_types, resists))
 
-    def set_racial_resists(self, resists):
-        assert len(resists) == 9, "invalid amount of arguments"
-        self.racial_resists = {races[i]:resists[i] for i in range(9)}
+    @property
+    def elem_resists(self):
+        return self._elem_resists
+
+    @elem_resists.setter
+    def elem_resists(self, resists):
+        resists = [0] * len(self.elements) if resists is None else resists
+        assert len(resists) == len(self.elements), "invalid amount of resistances"
+        self._elem_resists = dict(zip(self.elements, resists))
+
+    @property
+    def racial_resists(self):
+        return self._racial_resists
+
+    @racial_resists.setter
+    def racial_resists(self, resists):
+        resists = [0] * len(self.races) if resists is None else resists
+        assert len(resists) == len(self.races), "invalid amount of resistances"
+        self._racial_resists = dict(zip(self.races, resists))
 
     def __str__(self):
         string = ''
@@ -158,35 +186,29 @@ class Armor:
             string += '\n' + "{:>5} {:>3} {:>15} {:>3} {:>15} {:>3} {:>15} {:>3}".format(*row)
         return self.name + string
 
-def set_stat(target, stat, value):
-    assert stat in base_stats and isinstance(value, int), "invalid stat"
-    target.stats[stat] = value
-
-def set_stats(target, stats):
-    assert len(stats) == 10, "invalid stats"
-    target.stats = stats
-
 
 spear = Weapon("Guisarme", "str", [106] + [0] * 9)
-spear.set_dmg_bonus("slash", 11)
+spear.bonusses["dmg_type"] = "slash"
+spear.bonusses["dmg_bonus"] = 11
 #spear.set_elem_bonus("divine", 0)
 #spear.set_race_bonus("faerie", 20)
-set_stat(spear, "avd", 15)
+spear.stats["avd"] = 15
 
 bolon = Weapon("Bolon", "dex", [82] + [0] * 9)
-bolon.set_dmg_bonus("crush", 4)
-set_stat(bolon, "mind", 15)
+bolon.bonusses["dmg_type"] = "crush"
+bolon.bonusses["dmg_bonus"] = 4
+bolon.stats["mind"] = 15
 
 vest = Armor("Plated Vest", [0, 33] + [0] * 8, [21, 15, 21], [0] * 8)
-set_stat(vest, "avd", 20)
+vest.stats["avd"] = 20
 
 leggings = Armor("Scale Leggings", [0, 19] + [0] * 8, [11, 8, 11], [0] * 8)
-set_stat(leggings, "avd", 24)
+leggings.stats["avd"] = 24
 
 jewelry = Armor("test_jewel", is_jewelry=True)
 
 shield = Armor("shield")
-set_stat(shield, "def", 10)
+shield.stats["def"] = 10
 
 unit1 = Unit("Denam", "human", [17, 11, 97, 71, 90, 91, 89, 75, 77, 81], [spear, None, vest, leggings, jewelry], [False, "spear", 6, "none", 0, "none", 0])
 unit2 = Unit("Izabella", "faerie", [11, 5, 75, 60, 100, 94, 101, 97, 96, 96], [bolon, None, vest, leggings, None], [False, "instrument", 6, "none", 0, "none", 0])
