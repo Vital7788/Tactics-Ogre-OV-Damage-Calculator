@@ -36,32 +36,32 @@ class Unit:
         return self.name
 
     def gear_stat_total(self, stat):
-        return sum(map(lambda equip: equip.stats[stat], filter(lambda x: x is not None, self.equipment)))
+        return sum([equip.stats[stat] for equip in self.equipment if equip is not None])
 
     def get_weapon_elem(self):
         return self.equipment[0].bonusses["elem_type"] if isinstance(self.equipment[0], Weapon) else "none"
 
     def calc_offense(self, other):
         scale_str = self.equipment[0].scaling == "str" 
-        return (0.7 + 0.2 * scale_str) * (self.stats["str"]) + \
-                (0.5 + 0.2 * scale_str) * (self.gear_stat_total("str")) + \
-                (1.1 - 0.4 * scale_str) * self.stats["dex"] + \
-                (0.9 - 0.4 * scale_str) * (self.gear_stat_total("dex")) + \
-                4 * self.skills["w_rank"] + \
-                (self.equipment[0].bonusses["elem_type"] == self.skills["aug_elem"]) * self.skills["aug_rank"] * 4 + \
-                (self.skills["racial_race"] == other.race) * self.skills["racial_rank"] * 5
+        return (0.7 + 0.2 * scale_str) * (self.stats["str"]) \
+                + (0.5 + 0.2 * scale_str) * (self.gear_stat_total("str")) \
+                + (1.1 - 0.4 * scale_str) * self.stats["dex"] \
+                + (0.9 - 0.4 * scale_str) * (self.gear_stat_total("dex")) \
+                + 4 * self.skills["w_rank"] \
+                + (self.equipment[0].bonusses["elem_type"] == self.skills["aug_elem"]) * self.skills["aug_rank"] * 4 \
+                + (self.skills["racial_race"] == other.race) * self.skills["racial_rank"] * 5
 
     def calc_toughness(self, other):
-        return 0.7 * self.stats["str"] + 1.1 * self.stats["vit"] + \
-                0.5 * self.gear_stat_total("str") + 0.9 * self.gear_stat_total("vit") + \
-                (other.skills["w_type"] == self.skills["w_type"]) * self.skills["w_rank"] * 3 + \
-                (other.get_weapon_elem() == self.skills["aug_elem"]) * self.skills["aug_rank"] * 3
+        return 0.7 * self.stats["str"] + 1.1 * self.stats["vit"] \
+                + 0.5 * self.gear_stat_total("str") + 0.9 * self.gear_stat_total("vit") \
+                + (other.skills["w_type"] == self.skills["w_type"]) * self.skills["w_rank"] * 3 \
+                + (other.get_weapon_elem() == self.skills["aug_elem"]) * self.skills["aug_rank"] * 3
 
 
     def calc_damage_bonus(self, other):
         weapon = self.equipment[0]
-        bonus = weapon.bonusses["dmg_bonus"] + weapon.bonusses["elem_bonus"] + \
-                (weapon.bonusses["race_type"] == other.race) * weapon.bonusses["race_bonus"]
+        bonus = weapon.bonusses["dmg_bonus"] + weapon.bonusses["elem_bonus"] \
+                + (weapon.bonusses["race_type"] == other.race) * weapon.bonusses["race_bonus"]
 
         if self.equipment[4] is not None:
             jewelry = self.equipment[4]
@@ -70,23 +70,18 @@ class Unit:
         return bonus / 100
 
     def calc_resistance(self, other):
-        res = 0
         dmg_type = other.equipment[0].bonusses["dmg_type"]
         elem = other.equipment[0].bonusses["elem_type"]
-        for equip in filter(lambda x: isinstance(x, Armor), self.equipment):
-            res += equip.dmg_resists.get(dmg_type, 0) + equip.elem_resists.get(elem, 0) + equip.racial_resists.get(other.race, 0)
-        return res / 100
+        return sum([equip.dmg_resists.get(dmg_type, 0) + equip.elem_resists.get(elem, 0) + equip.racial_resists.get(other.race, 0) for equip in self.equipment if isinstance(equip, Armor)]) / 100
 
     def calc_extra_damage(self):
-        return 1.2 * self.equipment[0].stats["atk"] + self.stats["atk"] + \
-                (self.equipment[4].stats["atk"] if self.equipment[4] is not None else 0)
+        return 1.2 * self.equipment[0].stats["atk"] + self.stats["atk"] \
+                + (self.equipment[4].stats["atk"] if self.equipment[4] is not None else 0)
 
     def calc_defense(self):
-        defense = 0.9 * self.equipment[1].stats["def"] if isinstance(self.equipment[1], Armor) else 0
-        for equip in filter(lambda x: x is not None, self.equipment[2:]):
-            defense += equip.stats["def"]
-
-        return defense + self.stats["def"]
+        return sum([equip.stats["def"] for equip in self.equipment[2:] if equip is not None]) \
+                + (0.9 * self.equipment[1].stats["def"] if isinstance(self.equipment[1], Armor) else 0) \
+                + self.stats["def"]
 
     def attack(self, other):
         assert isinstance(self.equipment[0], Weapon), "no weapon equipped"
