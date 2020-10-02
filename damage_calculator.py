@@ -9,9 +9,10 @@ class Base:
     dmg_types = ["crush", "slash", "pierce"]
     races = ["human", "reptile", "divine", "umbra", "faerie", "phantom", "beast", "dragon", "golem"]
 
-    def __init__(self, name, stats=None):
+    def __init__(self, name, stats=None, **kwargs):
         self.name = name
         self.stats = stats
+        super().__init__(**kwargs)
 
     @property
     def stats(self):
@@ -30,12 +31,12 @@ class Unit(Base):
 
     #stats consist of class atk and def as seen on the class list on the party screen and
     #stats of the unit without any gear, which is the same as a units base stats + class stats
-    def __init__(self, name, race="human", stats=None, equipment=None, skills=None):
-        super().__init__(name, stats)
+    def __init__(self, race="human", equipment=None, skills=None, **kwargs):
         self.race = race
         self.skills = skills
         self.equipment = equipment
         #self.status
+        super().__init__(**kwargs)
 
     @property
     def equipment(self):
@@ -44,7 +45,9 @@ class Unit(Base):
     @equipment.setter
     def equipment(self, equip):
         equip = [0] * 5 if equip is None else equip
-        assert len(equip) == 5, "invalid equipment"
+        assert len(equip) == 5 and all([e is None or isinstance(e, Weapon) for e in equip[:2]]) and \
+                all([e is None or isinstance(e, Armor) for e in equip[2:]]) and \
+                (equip[4] is None or equip[4].is_jewelry), "invalid equipment"
         self._equipment = equip
 
     @property
@@ -58,7 +61,11 @@ class Unit(Base):
         self._skills = dict(zip(self.skill_categories, s))
     
     def __str__(self):
-        return self.name
+        string = ''
+        data = zip_longest(self.stats, self.stats.values(), [e.name if e is not None else "None" for e in self.equipment], self.skills, self.skills.values(), fillvalue = '')
+        for row in data:
+            string += '\n' + "{:>5} {:<5} {:<15} {:>15} {:<10}".format(*row)
+        return '{}({}) {}'.format(self.name, self.race, string)
 
     def gear_stat_total(self, stat):
         return sum([equip.stats[stat] for equip in self.equipment if equip is not None])
@@ -104,12 +111,12 @@ class Unit(Base):
 
     def calc_defense(self):
         return sum([equip.stats["def"] for equip in self.equipment[2:] if equip is not None]) \
-                + (0.9 * self.equipment[1].stats["def"] if isinstance(self.equipment[1], Armor) else 0) \
+                + (0.9 * self.equipment[1].stats["def"] if isinstance(self.equipment[1], Shield) else 0) \
                 + self.stats["def"]
 
     def attack(self, other):
         assert isinstance(self.equipment[0], Weapon), "no weapon equipped"
-        print(self.calc_offense(other), other.calc_toughness(self), self.calc_damage_bonus(other), other.calc_resistance(self), self.calc_extra_damage(), other.calc_defense())
+        #print(self.calc_offense(other), other.calc_toughness(self), self.calc_damage_bonus(other), other.calc_resistance(self), self.calc_extra_damage(), other.calc_defense())
         return round(max(self.calc_offense(other) - other.calc_toughness(self), 0) * min(max(1 + self.calc_damage_bonus(other) - other.calc_resistance(self), 0), 2.5) + self.calc_extra_damage() - other.calc_defense())
 
 
@@ -117,11 +124,11 @@ class Weapon(Base):
 
     weapon_bonus = ["dmg_type", "dmg_bonus", "elem_type", "elem_bonus", "race_type", "race_bonus"]
 
-    def __init__(self, name, scaling="str", stats=None, bonusses=None):
-        super().__init__(name, stats)
+    def __init__(self, scaling="str", bonusses=None, **kwargs):
         assert scaling == "str" or scaling == "dex", "invalid scaling"
         self.scaling = scaling
         self.bonusses = bonusses
+        super().__init__(**kwargs)
 
     @property
     def bonusses(self):
@@ -137,17 +144,17 @@ class Weapon(Base):
         string = ''
         data = zip_longest(self.stats, self.stats.values(), self.bonusses, self.bonusses.values(), fillvalue = '')
         for row in data:
-            string += '\n' + "{:>5} {:>3} {:>15} {:>10}".format(*row)
+            string += '\n' + "{:>5} {:<3} {:>12}  {:<5}".format(*row)
         return self.name + string
 
 class Armor(Base):
 
-    def __init__(self, name, stats=None, dmg_resists=None, elem_resists=None, racial_resists=None, is_jewelry=False):
-        super().__init__(name, stats)
+    def __init__(self, dmg_resists=None, elem_resists=None, racial_resists=None, is_jewelry=False, **kwargs):
         self.dmg_resists = dmg_resists
         self.elem_resists = elem_resists
         self.racial_resists = racial_resists
         self.is_jewelry = is_jewelry
+        super().__init__(**kwargs)
 
     @property
     def dmg_resists(self):
@@ -183,33 +190,47 @@ class Armor(Base):
         string = ''
         data = zip_longest(self.stats, self.stats.values(), self.dmg_resists, self.dmg_resists.values(), self.elem_resists, self.elem_resists.values(), self.racial_resists, self.racial_resists.values(), fillvalue = '')
         for row in data:
-            string += '\n' + "{:>5} {:>3} {:>15} {:>3} {:>15} {:>3} {:>15} {:>3}".format(*row)
+            string += '\n' + "{:>5} {:<3} {:>10} {:<3} {:>12} {:<3} {:>10} {:<3}".format(*row)
         return self.name + string
 
+class Shield(Weapon, Armor):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-spear = Weapon("Guisarme", "str", [106] + [0] * 9)
+    def __str__(self):
+        string = ''
+        data = zip_longest(self.stats, self.stats.values(), self.bonusses, self.bonusses.values(), self.dmg_resists, self.dmg_resists.values(), self.elem_resists, self.elem_resists.values(), self.racial_resists, self.racial_resists.values(), fillvalue = '')
+        for row in data:
+            string += '\n' + "{:>5} {:<3} {:>12}  {:<7} {:>8} {:<3} {:>12} {:<3} {:>10} {:<3}".format(*row)
+        return self.name + string
+
+spear = Weapon(name="Guisarme", scaling="str", stats=[106] + [0] * 9)
 spear.bonusses["dmg_type"] = "slash"
 spear.bonusses["dmg_bonus"] = 11
-#spear.set_elem_bonus("divine", 0)
-#spear.set_race_bonus("faerie", 20)
 spear.stats["avd"] = 15
 
-bolon = Weapon("Bolon", "dex", [82] + [0] * 9)
+bolon = Weapon(name="Bolon", scaling="dex", stats=[82] + [0] * 9)
 bolon.bonusses["dmg_type"] = "crush"
 bolon.bonusses["dmg_bonus"] = 4
 bolon.stats["mind"] = 15
 
-vest = Armor("Plated Vest", [0, 33] + [0] * 8, [21, 15, 21], [0] * 8)
+vest = Armor(name="Plated Vest", stats=[0, 33] + [0] * 8, dmg_resists=[21, 15, 21])
 vest.stats["avd"] = 20
 
-leggings = Armor("Scale Leggings", [0, 19] + [0] * 8, [11, 8, 11], [0] * 8)
+leggings = Armor(name="Scale Leggings", stats=[0, 19] + [0] * 8, dmg_resists=[11, 8, 11])
 leggings.stats["avd"] = 24
 
-jewelry = Armor("test_jewel", is_jewelry=True)
+jewelry = Armor(name="test_jewel", is_jewelry=True)
 
-shield = Armor("shield")
+shield = Shield(name="shield")
+shield.bonusses["dmg_type"] = "crush"
+shield.bonusses["dmg_bonus"] = 5
 shield.stats["def"] = 10
+print(spear)
+print(vest)
+print(shield)
 
-unit1 = Unit("Denam", "human", [17, 11, 97, 71, 90, 91, 89, 75, 77, 81], [spear, None, vest, leggings, jewelry], [False, "spear", 6, "none", 0, "none", 0])
-unit2 = Unit("Izabella", "faerie", [11, 5, 75, 60, 100, 94, 101, 97, 96, 96], [bolon, None, vest, leggings, None], [False, "instrument", 6, "none", 0, "none", 0])
+unit1 = Unit(name="Denam", race="human", stats=[17, 11, 97, 71, 90, 91, 89, 75, 77, 81], equipment=[spear, None, vest, leggings, jewelry], skills=[False, "spear", 6, "none", 0, "none", 0])
+unit2 = Unit(name="Izabella", race="faerie", stats=[11, 5, 75, 60, 100, 94, 101, 97, 96, 96], equipment=[bolon, None, vest, leggings, None], skills=[False, "instrument", 6, "none", 0, "none", 0])
 print(unit1.attack(unit2))
+print(unit1)
