@@ -83,11 +83,23 @@ class Unit(Base):
                 + (self.equipment[0].bonusses["elem_type"] == self.skills["aug_elem"]) * self.skills["aug_rank"] * 4 \
                 + (self.skills["racial_race"] == other.race) * self.skills["racial_rank"] * 5
 
+    def calc_power(self, other, element):
+        return self.stats["int"] + self.gear_stat_total("int") \
+                + 0.9 * self.stats["mind"] + 0.6 * self.gear_stat_total("mind") \
+                + (element == self.skills["aug_elem"]) * self.skills["aug_rank"] * 4 \
+                + (self.skills["racial_race"] == other.race) * self.skills["racial_rank"] * 5
+
+
     def calc_toughness(self, other):
         return 0.7 * self.stats["str"] + 1.1 * self.stats["vit"] \
                 + 0.5 * self.gear_stat_total("str") + 0.9 * self.gear_stat_total("vit") \
                 + (other.skills["w_type"] == self.skills["w_type"]) * self.skills["w_rank"] * 3 \
                 + (other.get_weapon_elem() == self.skills["aug_elem"]) * self.skills["aug_rank"] * 3
+
+    def calc_resilience(self, element):
+        return 0.8 * self.stats["mind"] + 0.6 * self.gear_stat_total("mind") \
+                + self.stats["res"] + self.gear_stat_total("res") \
+                + (element == self.skills["aug_elem"]) * self.skills["aug_rank"] * 3
 
     def calc_damage_bonus(self, other):
         weapon = self.equipment[0]
@@ -96,22 +108,26 @@ class Unit(Base):
 
         if self.equipment[4] is not None:
             jewelry = self.equipment[4]
-            bonus += jewelry.dmg_resists.get(weapon.bonusses["dmg_type"], 0) + jewelry.elem_resists.get(weapon.bonusses["elem_type"], 0) + jewelry.racial_resists.get(weapon.bonusses["race_type"], 0)
+            bonus += jewelry.dmg_resists.get(weapon.bonusses["dmg_type"], 0) + jewelry.elem_resists.get(weapon.bonusses["elem_type"], 0) + jewelry.racial_resists.get(other.race, 0)
 
         return bonus / 100
 
-    def calc_resistance(self, other):
-        dmg_type = other.equipment[0].bonusses["dmg_type"]
-        elem = other.equipment[0].bonusses["elem_type"]
+    def calc_m_damage_bonus(self, other, element):
+        return (0 if self.equipment[4] is None else self.equipment[4].elem_resists[element] + self.equipment[4].racial_resists[other.race]) / 100
+
+    def calc_resistance(self, other, weapon=True, dmg_type="none", elem="none"):
+        if weapon:
+            dmg_type = other.equipment[0].bonusses["dmg_type"]
+            elem = other.equipment[0].bonusses["elem_type"]
         return sum([equip.dmg_resists.get(dmg_type, 0) + equip.elem_resists.get(elem, 0) + equip.racial_resists.get(other.race, 0) for equip in self.equipment if isinstance(equip, Armor)]) / 100
 
     def calc_extra_damage(self):
         return 1.2 * self.equipment[0].stats["atk"] + self.stats["atk"] \
                 + (self.equipment[4].stats["atk"] if self.equipment[4] is not None else 0)
 
-    def calc_defense(self):
+    def calc_defense(self, spell=False):
         return sum([equip.stats["def"] for equip in self.equipment[2:] if equip is not None]) \
-                + (0.9 * self.equipment[1].stats["def"] if isinstance(self.equipment[1], Shield) else 0) \
+                + ((0.9 + (0.1*spell)) * self.equipment[1].stats["def"] if isinstance(self.equipment[1], Shield) else 0) \
                 + self.stats["def"]
 
     def attack(self, other):
@@ -119,6 +135,9 @@ class Unit(Base):
         #print(self.calc_offense(other), other.calc_toughness(self), self.calc_damage_bonus(other), other.calc_resistance(self), self.calc_extra_damage(), other.calc_defense())
         return round(max(self.calc_offense(other) - other.calc_toughness(self), 0) * min(max(1 + self.calc_damage_bonus(other) - other.calc_resistance(self), 0), 2.5) + self.calc_extra_damage() - other.calc_defense())
 
+    def cast(self, other, spell_power, element, dmg_type="none"):
+        print(self.calc_power(other, element), other.calc_resilience(element), self.calc_m_damage_bonus(other, element), other.calc_resistance(self, False, dmg_type, element), spell_power, other.calc_defense(True))
+        return round(max(self.calc_power(other, element) - other.calc_resilience(element), 0) * min(max(1 + self.calc_m_damage_bonus(other, element) - other.calc_resistance(self, False, dmg_type, element), 0), 2.5) + spell_power - other.calc_defense(True))
 
 class Weapon(Base):
 
@@ -226,11 +245,7 @@ shield = Shield(name="shield")
 shield.bonusses["dmg_type"] = "crush"
 shield.bonusses["dmg_bonus"] = 5
 shield.stats["def"] = 10
-print(spear)
-print(vest)
-print(shield)
 
 unit1 = Unit(name="Denam", race="human", stats=[17, 11, 97, 71, 90, 91, 89, 75, 77, 81], equipment=[spear, None, vest, leggings, jewelry], skills=[False, "spear", 6, "none", 0, "none", 0])
 unit2 = Unit(name="Izabella", race="faerie", stats=[11, 5, 75, 60, 100, 94, 101, 97, 96, 96], equipment=[bolon, None, vest, leggings, None], skills=[False, "instrument", 6, "none", 0, "none", 0])
-print(unit1.attack(unit2))
-print(unit1)
+print(unit1.cast(unit2, 40, "divine"))
