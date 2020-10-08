@@ -14,6 +14,7 @@ class Base:
     >>> spear.bonusses["racial_type"] = "faerie"
     >>> spear.bonusses["racial_bonus"] = 7
     >>> spear.stats["avd"] = 15
+    >>> spear.stats["agi"] = 20
 
     >>> bolon = Weapon(name="Bolon", scaling="dex", stats=[82] + [0] * 9)
     >>> bolon.bonusses["dmg_type"] = "crush"
@@ -53,6 +54,9 @@ class Base:
     >>> unit1.attack(unit2)
     162
 
+    >>> unit1.attack_accuracy(unit2, 0)
+    44
+
     >>> unit2.calc_power(unit1, "divine")
     222.4
     >>> unit1.calc_resilience("divine")
@@ -65,9 +69,12 @@ class Base:
     63
     >>> unit2.cast(unit1, 50, "divine")
     58
+
+    >>> unit2.spell_accuracy(unit1)
+    19
     """
 
-    base_stats = ["atk", "def", "str", "vit", "dex", "agil", "avd", "int", "mind", "res"]
+    base_stats = ["atk", "def", "str", "vit", "dex", "agi", "avd", "int", "mind", "res"]
     elements = ["air", "earth", "lightning", "water", "fire", "ice", "divine", "dark"]
     dmg_types = ["crush", "slash", "pierce"]
     races = ["human", "reptile", "divine", "umbra", "faerie", "phantom", "beast", "dragon", "golem"]
@@ -195,12 +202,30 @@ class Unit(Base):
 
     def attack(self, other):
         assert isinstance(self.equipment[0], Weapon), "no weapon equipped"
-        #print(self.calc_offense(other), other.calc_toughness(self), self.calc_damage_bonus(other), other.calc_resistance(self), self.calc_extra_damage(), other.calc_defense())
-        return max(1, math.floor(max(self.calc_offense(other) - other.calc_toughness(self), 0) * min(max(1 + self.calc_damage_bonus(other) - other.calc_resistance(self), 0), 2.5) + self.calc_extra_damage() - other.calc_defense()))
+        return max(1, math.floor(max(self.calc_offense(other) - other.calc_toughness(self), 0) \
+                * min(max(1 + self.calc_damage_bonus(other) - other.calc_resistance(self), 0), 2.5) 
+                + self.calc_extra_damage() - other.calc_defense()))
+
+    #direction = 0 for front, 1 for side and 2 for back
+    def attack_accuracy(self, other, direction):
+        return math.floor(min(100, max(25, 30 + 10 * self.skills["w_rank"]
+                + self.stats["dex"] + 1.2 * self.stats["agi"]
+                + 0.8 * self.gear_stat_total("dex") + self.gear_stat_total("agi")
+                - other.stats["dex"] - 1.2 * other.stats["avd"]
+                - 0.6 * other.gear_stat_total("dex") - other.gear_stat_total("avd")
+                - 10 * (other.skills["w_type"] == self.skills["w_type"]) * other.skills["w_rank"]) \
+                + direction * 15))
 
     def cast(self, other, spell_power, element, dmg_type="none"):
-        #print(self.calc_power(other, element), other.calc_resilience(element), self.calc_m_damage_bonus(other, element), other.calc_resistance(self, False, dmg_type, element), spell_power, other.calc_defense(True))
-        return max(1, math.floor(max(self.calc_power(other, element) - other.calc_resilience(element), 0) * min(max(1 + self.calc_m_damage_bonus(other, element) - other.calc_resistance(self, False, dmg_type, element), 0), 2.5) + spell_power - other.calc_defense(True)))
+        return max(1, math.floor(max(self.calc_power(other, element) - other.calc_resilience(element), 0) \
+                * min(max(1 + self.calc_m_damage_bonus(other, element) - other.calc_resistance(self, False, dmg_type, element), 0), 2.5) 
+                + spell_power - other.calc_defense(True)))
+
+    def spell_accuracy(self, other):
+        return math.floor(min(100, max(0, 1.2 * self.stats["mind"] + 1.2 * self.stats["int"]
+                + self.gear_stat_total("mind") + 0.8 * self.gear_stat_total("int")
+                - 0.8 * other.stats["mind"] - 1.2 * other.stats["avd"]
+                - 0.5 * other.gear_stat_total("mind") - other.gear_stat_total("avd"))))
 
 class Weapon(Base):
 
@@ -290,4 +315,3 @@ class Shield(Weapon, Armor):
 if __name__ == "__main__":
     import doctest
     doctest.testmod()
-
