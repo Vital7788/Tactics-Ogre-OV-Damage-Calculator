@@ -1,8 +1,71 @@
 from itertools import zip_longest
+import math
 
 #approximate damage bonusses for spells: projectile, aoe: 0, summons: 15, apocrypha: 40
 
 class Base:
+
+    """
+    >>> spear = Weapon(name="Guisarme", scaling="str", stats=[106] + [0] * 9)
+    >>> spear.bonusses["dmg_type"] = "slash"
+    >>> spear.bonusses["dmg_bonus"] = 11
+    >>> spear.bonusses["elem_type"] = "divine"
+    >>> spear.bonusses["elem_bonus"] = 15
+    >>> spear.bonusses["racial_type"] = "faerie"
+    >>> spear.bonusses["racial_bonus"] = 7
+    >>> spear.stats["avd"] = 15
+
+    >>> bolon = Weapon(name="Bolon", scaling="dex", stats=[82] + [0] * 9)
+    >>> bolon.bonusses["dmg_type"] = "crush"
+    >>> bolon.bonusses["dmg_bonus"] = 4
+    >>> bolon.stats["mind"] = 15
+
+    >>> vest = Armor(name="Plated Vest", stats=[0, 33] + [0] * 8, dmg_resists=[21, 15, 21])
+    >>> vest.stats["avd"] = 20
+
+    >>> leggings = Armor(name="Scale Leggings", stats=[0, 19] + [0] * 8, dmg_resists=[11, 8, 11])
+    >>> leggings.stats["avd"] = 24
+
+    >>> jewelry = Armor(name="test_jewel", is_jewelry=True)
+    >>> jewelry.elem_resists["divine"] = 10
+    >>> jewelry.racial_resists["human"] = 5
+
+    >>> shield = Shield(name="shield")
+    >>> shield.bonusses["dmg_type"] = "crush"
+    >>> shield.bonusses["dmg_bonus"] = 5
+    >>> shield.stats["def"] = 10
+
+    >>> unit1 = Unit(name="Denam", race="human", stats=[17, 11, 97, 71, 90, 91, 89, 75, 77, 81], equipment=[spear, None, vest, leggings, jewelry], skills=[False, "spear", 6, "divine", 4, "faerie", 3])
+    >>> unit2 = Unit(name="Izabella", race="faerie", stats=[11, 5, 75, 60, 100, 94, 101, 97, 96, 96], equipment=[bolon, None, vest, leggings, jewelry], skills=[False, "instrument", 6, "divine", 5, "human", 2])
+
+    >>> unit1.calc_offense(unit2)
+    205.3
+    >>> unit2.calc_toughness(unit1)
+    133.5
+    >>> unit1.calc_damage_bonus(unit2)
+    0.43
+    >>> unit2.calc_resistance(unit1)
+    0.38
+    >>> unit1.calc_extra_damage()
+    144.2
+    >>> unit2.calc_defense()
+    57
+    >>> unit1.attack(unit2)
+    162
+
+    >>> unit2.calc_power(unit1, "divine")
+    222.4
+    >>> unit1.calc_resilience("divine")
+    154.6
+    >>> unit2.calc_m_damage_bonus(unit1, "divine")
+    0.15
+    >>> unit1.calc_resistance(unit2, False, "none", "divine")
+    0.1
+    >>> unit1.calc_defense(True)
+    63
+    >>> unit2.cast(unit1, 50, "divine")
+    58
+    """
 
     base_stats = ["atk", "def", "str", "vit", "dex", "agil", "avd", "int", "mind", "res"]
     elements = ["air", "earth", "lightning", "water", "fire", "ice", "divine", "dark"]
@@ -104,7 +167,7 @@ class Unit(Base):
     def calc_damage_bonus(self, other):
         weapon = self.equipment[0]
         bonus = weapon.bonusses["dmg_bonus"] + weapon.bonusses["elem_bonus"] \
-                + (weapon.bonusses["race_type"] == other.race) * weapon.bonusses["race_bonus"]
+                + (weapon.bonusses["racial_type"] == other.race) * weapon.bonusses["racial_bonus"]
 
         if self.equipment[4] is not None:
             jewelry = self.equipment[4]
@@ -133,15 +196,15 @@ class Unit(Base):
     def attack(self, other):
         assert isinstance(self.equipment[0], Weapon), "no weapon equipped"
         #print(self.calc_offense(other), other.calc_toughness(self), self.calc_damage_bonus(other), other.calc_resistance(self), self.calc_extra_damage(), other.calc_defense())
-        return round(max(self.calc_offense(other) - other.calc_toughness(self), 0) * min(max(1 + self.calc_damage_bonus(other) - other.calc_resistance(self), 0), 2.5) + self.calc_extra_damage() - other.calc_defense())
+        return max(1, math.floor(max(self.calc_offense(other) - other.calc_toughness(self), 0) * min(max(1 + self.calc_damage_bonus(other) - other.calc_resistance(self), 0), 2.5) + self.calc_extra_damage() - other.calc_defense()))
 
     def cast(self, other, spell_power, element, dmg_type="none"):
-        print(self.calc_power(other, element), other.calc_resilience(element), self.calc_m_damage_bonus(other, element), other.calc_resistance(self, False, dmg_type, element), spell_power, other.calc_defense(True))
-        return round(max(self.calc_power(other, element) - other.calc_resilience(element), 0) * min(max(1 + self.calc_m_damage_bonus(other, element) - other.calc_resistance(self, False, dmg_type, element), 0), 2.5) + spell_power - other.calc_defense(True))
+        #print(self.calc_power(other, element), other.calc_resilience(element), self.calc_m_damage_bonus(other, element), other.calc_resistance(self, False, dmg_type, element), spell_power, other.calc_defense(True))
+        return max(1, math.floor(max(self.calc_power(other, element) - other.calc_resilience(element), 0) * min(max(1 + self.calc_m_damage_bonus(other, element) - other.calc_resistance(self, False, dmg_type, element), 0), 2.5) + spell_power - other.calc_defense(True)))
 
 class Weapon(Base):
 
-    weapon_bonus = ["dmg_type", "dmg_bonus", "elem_type", "elem_bonus", "race_type", "race_bonus"]
+    weapon_bonus = ["dmg_type", "dmg_bonus", "elem_type", "elem_bonus", "racial_type", "racial_bonus"]
 
     def __init__(self, scaling="str", bonusses=None, **kwargs):
         assert scaling == "str" or scaling == "dex", "invalid scaling"
@@ -223,29 +286,8 @@ class Shield(Weapon, Armor):
             string += '\n' + "{:>5} {:<3} {:>12}  {:<7} {:>8} {:<3} {:>12} {:<3} {:>10} {:<3}".format(*row)
         return self.name + string
 
-spear = Weapon(name="Guisarme", scaling="str", stats=[106] + [0] * 9)
-spear.bonusses["dmg_type"] = "slash"
-spear.bonusses["dmg_bonus"] = 11
-spear.stats["avd"] = 15
 
-bolon = Weapon(name="Bolon", scaling="dex", stats=[82] + [0] * 9)
-bolon.bonusses["dmg_type"] = "crush"
-bolon.bonusses["dmg_bonus"] = 4
-bolon.stats["mind"] = 15
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
 
-vest = Armor(name="Plated Vest", stats=[0, 33] + [0] * 8, dmg_resists=[21, 15, 21])
-vest.stats["avd"] = 20
-
-leggings = Armor(name="Scale Leggings", stats=[0, 19] + [0] * 8, dmg_resists=[11, 8, 11])
-leggings.stats["avd"] = 24
-
-jewelry = Armor(name="test_jewel", is_jewelry=True)
-
-shield = Shield(name="shield")
-shield.bonusses["dmg_type"] = "crush"
-shield.bonusses["dmg_bonus"] = 5
-shield.stats["def"] = 10
-
-unit1 = Unit(name="Denam", race="human", stats=[17, 11, 97, 71, 90, 91, 89, 75, 77, 81], equipment=[spear, None, vest, leggings, jewelry], skills=[False, "spear", 6, "none", 0, "none", 0])
-unit2 = Unit(name="Izabella", race="faerie", stats=[11, 5, 75, 60, 100, 94, 101, 97, 96, 96], equipment=[bolon, None, vest, leggings, None], skills=[False, "instrument", 6, "none", 0, "none", 0])
-print(unit1.cast(unit2, 40, "divine"))
