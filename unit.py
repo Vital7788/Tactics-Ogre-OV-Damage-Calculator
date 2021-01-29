@@ -8,11 +8,11 @@ class Unit(equipment.Base):
 
     #stats consist of class atk and def as seen on the class list on the party screen and
     #stats of the unit without any gear, which is the same as a units base stats + class stats
-    def __init__(self, race="human", equipment=None, skills=None, **kwargs):
+    def __init__(self, race="human", equipment=None, skills=None, status=None, **kwargs):
         self.race = race
         self.skills = skills
         self.equipment = equipment
-        #self.status
+        self.status
         super().__init__(**kwargs)
 
     @property
@@ -128,6 +128,9 @@ class Unit(equipment.Base):
                 * min(max(1 + self.calc_m_damage_bonus(other, element) - other.calc_resistance(self, False, dmg_type, element), 0), 2.5) 
                 + spell_power - other.calc_defense(True)))
 
+    #direction = 0 for front, 1 for side and 2 for back
+    #formula only applicable for projectile and summon spells
+    #accuracy for AoE and apocrypha spells is always 100%
     def spell_accuracy(self, other):
         return math.floor(min(100, max(0, 1.2 * self.stats["mind"] + 1.2 * self.stats["int"]
                 + self.gear_stat_total("mind") + 0.8 * self.gear_stat_total("int")
